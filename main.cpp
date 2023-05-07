@@ -13,6 +13,7 @@
 #include "segmentation.cpp"
 #include "segmentor.cpp"
 #include "segment.cpp"
+#include "selector.cpp"
 
 
 using namespace cv;
@@ -102,10 +103,8 @@ Mat * converting(int *** map, Mat * compare, Mat * result, int channel)
     
     for(int y = 0; y < compare->rows; y++)
     {
-
         for(int x = 0; x < compare->cols; x++)
         {
-            
             Vec3b point = compare->at<Vec3b>(y,x);
            
             result->at<cv::Vec3b>(y,x)[0] = 0;
@@ -141,165 +140,203 @@ Mat * converting(int *** map, Mat * compare, Mat * result, int channel)
 int main(int argc, char *argv[]) {   
 
 
-    
-    std::cout << "starting" << std::endl;
-    /*check parameters*/
-    if(argc < 3)
-    {
-        printf("Usage: %s path_to_picture path_to_export_folder", argv[0]);
-        return 0;
-    }
-        const string picture = argv[1];
-        string folder = argv[2];
-        string jsonFolder = argv[2];
-        string jsonFile = "segmente.json";
-        int color = 1;
-
-        int minSize = 400;
-        if(argc > 3)
+    try{
+        //std::cout << "starting" << std::endl;
+        /*check parameters*/
+        if(argc < 3)
         {
-            if(argv[3][0] == '-')
-            {
-                switch(argv[3][1])
-                {
-                    case 'b':
-                        color = 0;
-                        break;
-                    case 'g':
-                        color = 1;
-                        break;
-                    case 'r':
-                        color = 2;
-                        break;
-                }
-            }
-            else
-            {
-                jsonFolder = argv[3];
-            }
+            
+            throw runtime_error("Program expects at least 2 Parameters, " + to_string(argc-1) + " given.");
+        
         }
+            const string picture = argv[1];
+            string folder = argv[2];
 
-        folder = (folder.back() == '/') ? folder : folder+"/";
-        
-        
+            folder = (folder.back() == '/') ? folder : folder+"/";
 
-        if(!fileExists(picture))
-        {
-            printf("file: '%s' could not be opened\n",picture.c_str());
-            return -1;
-        }
-    
-       
-    
+            string jsonFolder = argv[2];
+            string jsonFile = "segmente.json";
+            int color = 1;
 
-    auto started = std::chrono::high_resolution_clock::now();
-    bool debugbool = false;
-
-    Mat image;
-    Mat channels[3];
-    
-    std::cout << "loading file" << std::endl;
-
-    image = imread(picture);
-
-    
-
-    if( !image.data)
-    {
-        
-        return -1;
-    }
-
-
-
-    int ** greenmap = new int*[image.rows];
-    
-    for(int i = 0; i < image.rows; i++)
-    {
-        greenmap[i] = new int[image.cols];
-    }
-
-    
-    Mat compare;
-    medianBlur( image, compare,  5 );    
-
-    Mat result = compare.clone();    
-    
-    
-    
-    result = * converting(&greenmap,&compare,&result,color);
-
-    Segmentor * harry = new Segmentor(&greenmap,0,result.rows,result.cols);
-       
-    jsonFile = (jsonFolder.back() != '/') ? jsonFolder : jsonFolder+"/"+jsonFile;
-    
-    ofstream outputJson(jsonFile);
-
-    if(!fileExists(jsonFile))
-    {
-        printf("\"%s\" could not be created",jsonFile.c_str());
-        return -1;
-    }
-    std::cout << "exporting" << std::endl;
-    std::cout << "JSON" << std::endl;
-    outputJson << "[\n";
-    printf("[\n");
-
-    for(std::vector<myoSegment>::iterator it = harry->segmente.begin(); it != harry->segmente.end(); ++it)
-    {
-        if(it[0].height * it[0].width > 300)
-        {
-            Mat seg(it[0].height,it[0].width,  CV_8UC3);
-            for(int y = 0; y < it[0].height; y++)
+            int minSize = 400;
+            if(argc > 3)
             {
-                for(int x = 0; x < it[0].width; x++)
+                if(argv[3][0] == '-')
                 {
-                    if(x >= 0 && x < seg.cols && y >= 0 && y < seg.rows)
+                    switch(argv[3][1])
                     {
-                        seg.at<cv::Vec3b>(y,x)[0] = 255 * it[0].map[y][x];
-                        seg.at<cv::Vec3b>(y,x)[1] = 255 * it[0].map[y][x];
-                        seg.at<cv::Vec3b>(y,x)[2] = 255 * it[0].map[y][x];
+                        case 'b':
+                            color = 0;
+                            break;
+                        case 'g':
+                            color = 1;
+                            break;
+                        case 'r':
+                            color = 2;
+                            break;
                     }
                 }
+                else
+                {
+                    jsonFolder = argv[3];
+                }
             }
-           
-            if(it != harry->segmente.begin() && it != harry->segmente.end())
+          
+            
+            
+
+            if(!fileExists(picture))
             {
-                outputJson << ",\n";
-                printf(",\n");
+                throw runtime_error("File could not be found at " + picture);
             }
-            string path = folder + "seg" + to_string(it[0].minX) + "-" + to_string(it[0].minY) + ".jpg";
+        
+        
+        
 
-            outputJson << "{\"path\":\""+path+"\",\"y\":"+to_string(it[0].minY)+",\"x\":"+to_string(it[0].minX)+",\"height\":"+to_string(it[0].height)+",\"width\":"+to_string(it[0].width)+"}";
+        
+        bool debugbool = false;
 
+        Mat image;
+        Mat channels[3];
+        
+        //std::cout << "loading file" << std::endl;
 
-            printf("{\"path\":\"%s\",\"y\":%d,\"x\":%d,\"height\":%d,\"width\":%d}",path.c_str(),it[0].minY,it[0].minX,it[0].height,it[0].width);
-            imwrite(path, seg);
-        }
-    }
-    printf("\n]");
-    outputJson << "\n]";
+        image = imread(picture);
 
-    outputJson.close();
+        
 
-    namedWindow("Display Input", WINDOW_NORMAL);
-    imshow("Display Input", image);
-
-    namedWindow("Display Preprocessing", WINDOW_NORMAL);
-    imshow("Display Preprocessing", result);
-
-    for(std::vector<myoSegment>::iterator it = harry->segmente.begin(); it != harry->segmente.end(); ++it)
-    {
-        if(it[0].height * it[0].width > minSize)
+        if( !image.data)
         {
-            Point p1(it[0].minX,it[0].minY);
-            Point p2(it[0].minX+it[0].width,it[0].minY+it[0].height);
-
-            rectangle(result,p1,p2,Scalar(0,0,255),2,LINE_8);
+            throw runtime_error("File: " + picture + " could not be loaded ");
         }
+
+
+
+        int ** greenmap = new int*[image.rows];
+        
+        for(int i = 0; i < image.rows; i++)
+        {
+            greenmap[i] = new int[image.cols];
+        }
+
+        
+        Mat compare;
+        medianBlur(image, compare,  5);    
+
+        Mat result = compare.clone();  
+        Mat selectResult = compare.clone();  
+        
+        
+        
+        result = * converting(&greenmap,&compare,&result,color);
+
+        int ** mapToSelect = new int*[result.rows];
+        
+        for (int y = 0; y < result.rows; y++) {
+            mapToSelect[y] = new int[result.cols];
+            for (int x = 0; x < result.cols; x++) {
+                mapToSelect[y][x] = greenmap[y][x];
+            }
+        }
+
+
+        Segmentor * harry = new Segmentor(&greenmap,0,result.rows,result.cols);
+        //Selector * hermine = new Selector(&mapToSelect,5,result.rows,result.cols);
+        
+
+       
+
+        jsonFile = (jsonFolder.back() != '/') ? jsonFolder : jsonFolder+"/"+jsonFile;
+        
+        ofstream outputJson(jsonFile);
+
+        if(!fileExists(jsonFile))
+        {
+            throw runtime_error("Json: " + jsonFile + " could not be created ");
+        }
+        //std::cout << "exporting" << std::endl;
+        //std::cout << "JSON" << std::endl;
+        outputJson << "[\n";
+        string data = "[\n";
+        
+
+        for(std::vector<myoSegment>::iterator it = harry->segmente.begin(); it != harry->segmente.end(); ++it)
+        {
+            if(it[0].height * it[0].width > 300)
+            {
+                Mat seg(it[0].height,it[0].width,  CV_8UC3);
+                for(int y = 0; y < it[0].height; y++)
+                {
+                    for(int x = 0; x < it[0].width; x++)
+                    {
+                        if(x >= 0 && x < seg.cols && y >= 0 && y < seg.rows)
+                        {
+                            seg.at<cv::Vec3b>(y,x)[0] = 255 * it[0].map[y][x];
+                            seg.at<cv::Vec3b>(y,x)[1] = 255 * it[0].map[y][x];
+                            seg.at<cv::Vec3b>(y,x)[2] = 255 * it[0].map[y][x];
+                        }
+                    }
+                }
+            
+                if(it != harry->segmente.begin() && it != harry->segmente.end())
+                {
+                    outputJson << ",\n";
+                    data += ",\n";
+                }
+                string path = folder + "seg" + to_string(it[0].minX) + "-" + to_string(it[0].minY) + ".jpg";
+
+                outputJson << "{\"path\":\""+path+"\",\"y\":"+to_string(it[0].minY)+",\"x\":"+to_string(it[0].minX)+",\"height\":"+to_string(it[0].height)+",\"width\":"+to_string(it[0].width)+"}";
+                data += "{\"path\":\""+path+"\",\"y\":"+to_string(it[0].minY)+",\"x\":"+to_string(it[0].minX)+",\"height\":"+to_string(it[0].height)+",\"width\":"+to_string(it[0].width)+"}";
+
+                
+                imwrite(path, seg);
+            }
+        }
+        data += "\n]";
+        outputJson << "\n]";
+
+        outputJson.close();
+    
+    
+
+     
+
+        for(std::vector<myoSegment>::iterator it = harry->segmente.begin(); it != harry->segmente.end(); ++it)
+        {
+            if(it[0].height * it[0].width > minSize)
+            {
+                Point p1(it[0].minX,it[0].minY);
+                Point p2(it[0].minX+it[0].width,it[0].minY+it[0].height);
+
+                rectangle(result,p1,p2,Scalar(0,0,255),2,LINE_8);
+            }
+        }
+        
+    	/*int redChannel[10] =   {0, 255, 225, 197, 169, 141, 112, 84,  28};
+        int greenChannel[10] = {0, 225, 28,  56,  84,  112, 141, 169, 197};
+        int blueChannel[10] =   {0, 225, 28,  56,  84,  112, 141, 169, 197};
+        for(int x = 0; x < selectResult.cols; x++)
+        {
+            for(int y = 0; y < selectResult.rows; y++)
+            {
+                
+                selectResult.at<cv::Vec3b>(y,x)[0] = blueChannel[hermine->map[y][x]];
+                selectResult.at<cv::Vec3b>(y,x)[1] = greenChannel[hermine->map[y][x]];
+                selectResult.at<cv::Vec3b>(y,x)[2] = redChannel[hermine->map[y][x]];
+            }
+        }
+        namedWindow("Image", cv::WINDOW_NORMAL); // Create a resizable window
+        imshow("Image", selectResult);
+        waitKey(0);*/
+
+        cout << "{\n status: \"ok\", \n data: " << data.c_str() << " \n}" << endl;
+
+
+
+        return 0;
     }
-    namedWindow("Display Segmentation", WINDOW_NORMAL);
-    imshow("Display Segmentation", result);
-    waitKey(0);
-    return 0;
+    catch (const runtime_error& e) {
+        
+        cerr << "{\n status: \"error\", \n message: \"" << e.what() << "\", \n error: \"" << e.what() << "\" \n}" << endl;
+    }
 }
